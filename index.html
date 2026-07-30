@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hybrid Messaging App</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        body { background: #f0f2f5; height: 100vh; display: flex; flex-direction: column; }
+        
+        .screen { display: none; padding: 20px; flex: 1; flex-direction: column; justify-content: center; }
+        .screen.active { display: flex; }
+
+        input, button, textarea { width: 100%; padding: 12px; margin-top: 10px; border-radius: 8px; border: 1px solid #ccc; outline: none; }
+        button { background: #075e54; color: white; font-weight: bold; border: none; cursor: pointer; }
+
+        .profile-avatar { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin: 0 auto; }
+        
+        /* App Header */
+        header { background: #075e54; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
+        
+        /* Search Box & Results */
+        .search-card { background: white; padding: 10px; margin-top: 5px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .search-card img { width: 40px; height: 40px; border-radius: 50%; }
+
+        /* Messages Container */
+        #chat-box { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .message-bubble { padding: 10px; background: white; border-radius: 8px; max-width: 75%; box-shadow: 0 1px 2px rgba(0,0,0,0.1); position: relative; }
+        .message-bubble.mine { background: #dcf8c6; align-self: flex-end; }
+        .delete-btn { color: red; font-size: 10px; border: none; background: none; cursor: pointer; margin-left: 10px; }
+    </style>
+</head>
+<body>
+
+<div id="auth-screen" class="screen active">
+    <h2>Login / Sign Up</h2>
+    <input type="tel" id="phoneInput" placeholder="Enter Phone Number (+91...)">
+    <button onclick="sendOTP()">Send OTP</button>
+    
+    <div id="otp-container" style="display:none; margin-top:15px;">
+        <input type="text" id="otpInput" placeholder="Enter OTP (Use: 1234)">
+        <button onclick="verifyOTP()">Verify & Login</button>
+    </div>
+</div>
+
+<div id="profile-screen" class="screen">
+    <h2>Create Your Profile</h2>
+    <input type="text" id="avatarUrl" placeholder="Paste Image URL for Avatar">
+    <input type="text" id="usernameInput" placeholder="Enter Username / ID">
+    <textarea id="bioInput" placeholder="Write something about yourself (Bio)..."></textarea>
+    <button onclick="saveProfile()">Save Profile</button>
+</div>
+
+<div id="app-screen" class="screen" style="padding:0;">
+    <header>
+        <div style="display:flex; align-items:center; gap:10px;">
+            <img id="my-avatar" class="profile-avatar" style="width:40px; height:40px;" src="https://via.placeholder.com/150">
+            <div>
+                <b id="my-username">User</b><br>
+                <small id="my-phone" style="font-size:10px; opacity:0.8;"></small>
+            </div>
+        </div>
+    </header>
+
+    <div style="padding:10px; background:#fff;">
+        <input type="text" id="searchInput" placeholder="Search user by ID or Username..." onkeyup="searchUser(this.value)">
+        <div id="search-results"></div>
+    </div>
+
+    <div id="request-alert" style="padding:10px; background:#fff3cd; display:none;"></div>
+
+    <div id="chat-box"></div>
+
+    <div style="display:flex; padding:10px; background:#eee; gap:5px;">
+        <input type="text" id="msgInput" placeholder="Type a message...">
+        <button style="width: auto;" onclick="sendMsg()">Send</button>
+    </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const socket = io();
+    let currentPhone = '';
+    let activeChatFriendPhone = '';
+
+    // 1. Send & Verify OTP
+    function sendOTP() {
+        currentPhone = document.getElementById('phoneInput').value.trim();
+        if(currentPhone) socket.emit('send-otp', currentPhone);
+    }
+
+    socket.on('otp-sent', data => {
+        alert(data.message);
+        document.getElementById('otp-container').style.display = 'block';
+    });
+
+    function verifyOTP() {
+        const otp = document.getElementById('otpInput').value.trim();
+        socket.emit('verify-otp', { phone: currentPhone, otp });
+    }
+
+    socket.on('login-success', ({ isNewUser, userData }) => {
+        switchScreen(isNewUser ? 'profile-screen' : 'app-screen');
+        if(!isNewUser) renderProfileData(userData);
+    });
+
+    // 2. Save User Profile
+    function saveProfile() {
+        const username = document.getElementById('usernameInput').value.trim();
+        const bio = document.getElementById('bioInput').value.trim();
+        const avatar = document.getElementById('avatarUrl').value.trim();
+
+        socket.emit('save-profile', { phone: currentPhone, username, bio, avatar });
+    }
+
+    socket.on('profile-saved-success', (userData) => {
+        switchScreen('app-screen');
+        renderProfileData(userData);
+    });
+
+    function renderProfileData(user) {
+        document.getElementById('my-username').innerText = user.username;
+        document.getElementById('my-phone').innerText = user.phone;
+        document.getElementById('my-avatar').src = user.avatar || 'https://via.placeholder.com/150';
+
+        if(user.pendingRequests && user.pendingRequests.length > 0) {
+            const alertBox = document.getElementById('request-alert');
+            alertBox.style.display = 'block';
+            alertBox.innerHTML = `<b>Friend Request From:</b> ${user.pendingRequests[0]} 
+                <button style="width:auto; padding:4px 8px;" onclick="acceptFriend('${user.pendingRequests[0]}')">Accept</button>`;
+        }
+    }
+
+    // 3. Search System
+    function searchUser(query) {
+        if(query.length > 0) socket.emit('search-username', query);
+        else document.getElementById('search-results').innerHTML = '';
+    }
+
+    socket.on('search-results', (users) => {
+        const resultsBox = document.getElementById('search-results');
+        resultsBox.innerHTML = '';
+        users.forEach(u => {
+            resultsBox.innerHTML += `
+                <div class="search-card">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <img src="${u.avatar || 'https://via.placeholder.com/150'}">
+                        <div><b>${u.username}</b><br><small>${u.bio || 'No bio'}</small></div>
+                    </div>
+                    <button style="width:auto; padding:6px 10px;" onclick="addFriend('${u.phone}')">➕ Add Friend</button>
+                </div>`;
+        });
+    });
+
+    function addFriend(targetPhone) {
+        socket.emit('send-friend-request', { targetPhone, myPhone: currentPhone });
+    }
+
+    function acceptFriend(requesterPhone) {
+        socket.emit('accept-friend-request', { myPhone: currentPhone, requesterPhone });
+    }
+
+    socket.on('friend-accepted', (userData) => {
+        alert("Friend added! You can now chat.");
+        document.getElementById('request-alert').style.display = 'none';
+        activeChatFriendPhone = userData.friends[0];
+    });
+
+    // 4. Send Messaging & Delete Message
+    function sendMsg() {
+        const text = document.getElementById('msgInput').value;
+        if(text && activeChatFriendPhone) {
+            socket.emit('send-private-msg', { myPhone: currentPhone, targetPhone: activeChatFriendPhone, text });
+            document.getElementById('msgInput').value = '';
+        } else {
+            alert("Please select or add a friend first to start chatting!");
+        }
+    }
+
+    socket.on('receive-private-msg', (msg) => {
+        const chatBox = document.getElementById('chat-box');
+        const isMine = msg.senderPhone === currentPhone;
+
+        const div = document.createElement('div');
+        div.className = `message-bubble ${isMine ? 'mine' : ''}`;
+        div.id = `msg-${msg.id}`;
+        div.innerHTML = `
+            <span>${msg.text}</span>
+            <small style="font-size:9px; color:gray;">${msg.timestamp}</small>
+            ${isMine ? `<button class="delete-btn" onclick="deleteMsg('${msg.id}')">🗑️ Delete</button>` : ''}
+        `;
+
+        chatBox.appendChild(div);
+        chatBox.scrollTop = chatBox.scrollHeight;
+    });
+
+    function deleteMsg(msgId) {
+        socket.emit('delete-msg', msgId);
+    }
+
+    socket.on('msg-deleted-success', (msgId) => {
+        const msgEl = document.getElementById(`msg-${msgId}`);
+        if(msgEl) msgEl.remove();
+    });
+
+    socket.on('toast-msg', msg => alert(msg));
+
+    function switchScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(screenId).classList.add('active');
+    }
+</script>
+
+</body>
+</html>
