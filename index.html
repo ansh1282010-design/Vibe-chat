@@ -1,215 +1,295 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="hi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hybrid Messaging App</title>
+    <title>Vibe-chat - Ultimate Social App</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
-        body { background: #f0f2f5; height: 100vh; display: flex; flex-direction: column; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #fff; margin: 0; padding: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        .card { background: #1e293b; padding: 25px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); width: 350px; text-align: center; }
+        input, select { width: 100%; padding: 12px; margin: 10px 0; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #fff; font-size: 15px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.3s; margin-top: 5px; }
+        button:hover { background: #1d4ed8; }
+        .hidden { display: none; }
         
-        .screen { display: none; padding: 20px; flex: 1; flex-direction: column; justify-content: center; }
-        .screen.active { display: flex; }
-
-        input, button, textarea { width: 100%; padding: 12px; margin-top: 10px; border-radius: 8px; border: 1px solid #ccc; outline: none; }
-        button { background: #075e54; color: white; font-weight: bold; border: none; cursor: pointer; }
-
-        .profile-avatar { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin: 0 auto; }
-        
-        /* App Header */
-        header { background: #075e54; color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
-        
-        /* Search Box & Results */
-        .search-card { background: white; padding: 10px; margin-top: 5px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
-        .search-card img { width: 40px; height: 40px; border-radius: 50%; }
-
-        /* Messages Container */
-        #chat-box { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
-        .message-bubble { padding: 10px; background: white; border-radius: 8px; max-width: 75%; box-shadow: 0 1px 2px rgba(0,0,0,0.1); position: relative; }
-        .message-bubble.mine { background: #dcf8c6; align-self: flex-end; }
-        .delete-btn { color: red; font-size: 10px; border: none; background: none; cursor: pointer; margin-left: 10px; }
+        /* चैट और डैशबोर्ड लेआउट */
+        #app-container { display: none; width: 100vw; height: 100vh; background: #0f172a; flex-direction: column; }
+        .header { background: #1e293b; padding: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; }
+        .main-content { display: flex; flex: 1; overflow: hidden; }
+        .sidebar { width: 300px; background: #1e293b; border-right: 1px solid #334155; display: flex; flex-direction: column; padding: 10px; }
+        .chat-area { flex: 1; display: flex; flex-direction: column; padding: 20px; justify-content: space-between; }
+        .user-list { flex: 1; overflow-y: auto; margin-top: 10px; }
+        .user-item { padding: 10px; margin: 5px 0; background: #334155; border-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+        .user-item:hover { background: #475569; }
+        .chat-box { flex: 1; background: #1e293b; border-radius: 8px; padding: 15px; overflow-y: auto; margin-bottom: 15px; }
+        .input-group { display: flex; gap: 10px; }
     </style>
 </head>
 <body>
 
-<div id="auth-screen" class="screen active">
-    <h2>Login / Sign Up</h2>
-    <input type="tel" id="phoneInput" placeholder="Enter Phone Number (+91...)">
-    <button onclick="sendOTP()">Send OTP</button>
-    
-    <div id="otp-container" style="display:none; margin-top:15px;">
-        <input type="text" id="otpInput" placeholder="Enter OTP (Use: 1234)">
-        <button onclick="verifyOTP()">Verify & Login</button>
+    <div style="position: absolute; top: 15px; right: 15px; z-index: 100;">
+        <select id="lang-select" style="width: 130px; padding: 8px; background: #1e293b; color: #fff; border-radius: 6px;" onchange="changeLanguage()">
+            <option value="hi">हिंदी (Hindi)</option>
+            <option value="en">English</option>
+        </select>
     </div>
-</div>
 
-<div id="profile-screen" class="screen">
-    <h2>Create Your Profile</h2>
-    <input type="text" id="avatarUrl" placeholder="Paste Image URL for Avatar">
-    <input type="text" id="usernameInput" placeholder="Enter Username / ID">
-    <textarea id="bioInput" placeholder="Write something about yourself (Bio)..."></textarea>
-    <button onclick="saveProfile()">Save Profile</button>
-</div>
+    <div class="card" id="login-card">
+        <h2 id="t-login-title">Vibe-chat लॉगिन</h2>
+        
+        <div id="phone-box">
+            <p id="t-phone-desc" style="color: #94a3b8; font-size: 13px;">फायरबेस असली OTP के लिए नंबर (+91) डालें</p>
+            <input type="tel" id="phone" value="+91">
+            <button id="t-otp-btn" onclick="sendOTP()">असली OTP भेजें</button>
+        </div>
 
-<div id="app-screen" class="screen" style="padding:0;">
-    <header>
-        <div style="display:flex; align-items:center; gap:10px;">
-            <img id="my-avatar" class="profile-avatar" style="width:40px; height:40px;" src="https://via.placeholder.com/150">
-            <div>
-                <b id="my-username">User</b><br>
-                <small id="my-phone" style="font-size:10px; opacity:0.8;"></small>
+        <div id="otp-box" class="hidden">
+            <p id="t-otp-desc" style="color: #94a3b8; font-size: 13px;">6-अंकों का OTP दर्ज करें</p>
+            <input type="text" id="otp" placeholder="OTP कोड">
+            <button id="t-verify-btn" onclick="verifyOTP()">लॉगिन वेरिफ़ाई करें</button>
+        </div>
+        <div id="recaptcha-container"></div>
+    </div>
+
+    <div id="app-container">
+        <div class="header">
+            <h3 id="t-dash-title">✨ Vibe-chat डैशबोर्ड</h3>
+            <span id="current-user-phone" style="color: #38bdf8;"></span>
+        </div>
+        <div class="main-content">
+            <div class="sidebar">
+                <input type="text" id="search-user" placeholder="🔍 यूजर खोजें..." onkeyup="searchUsers()">
+                <h4 id="t-profiles-title">उपलब्ध प्रोफाइल्स और फ्रेंड्स</h4>
+                <div class="user-list" id="user-list-container"></div>
+                <button id="t-group-btn" style="background: #7c3aed;" onclick="createGroup()">+ नया ग्रुप बनाएं</button>
+            </div>
+
+            <div class="chat-area">
+                <div style="display: flex; justify-content: space-between; align-items: center; background: #1e293b; padding: 10px; border-radius: 8px;">
+                    <h4 id="active-chat-title">बातचीत करने के लिए किसी फ्रेंड को चुनें</h4>
+                    <div>
+                        <button id="t-vcall-btn" style="width: auto; padding: 6px 12px; background: #059669;" onclick="startVideoCall()">📹 वीडियो कॉल</button>
+                        <button id="t-games-btn" style="width: auto; padding: 6px 12px; background: #d97706;" onclick="openGames()">🎮 गेम्स</button>
+                    </div>
+                </div>
+
+                <div class="chat-box" id="chat-messages">
+                    <p id="t-chat-rule" style="color: #64748b; text-align: center; margin-top: 50px;">🔒 नियम: जब तक आप किसी को फ्रेंड के रूप में 'Add' नहीं करते, तब तक आप चैट नहीं कर सकते।</p>
+                </div>
+
+                <div class="input-group">
+                    <input type="text" id="message-input" placeholder="संदेश टाइप करें..." disabled>
+                    <button style="width: 100px;" id="send-btn" onclick="sendMessage()" disabled>भेजें</button>
+                </div>
             </div>
         </div>
-    </header>
-
-    <div style="padding:10px; background:#fff;">
-        <input type="text" id="searchInput" placeholder="Search user by ID or Username..." onkeyup="searchUser(this.value)">
-        <div id="search-results"></div>
     </div>
 
-    <div id="request-alert" style="padding:10px; background:#fff3cd; display:none;"></div>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-    <div id="chat-box"></div>
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
 
-    <div style="display:flex; padding:10px; background:#eee; gap:5px;">
-        <input type="text" id="msgInput" placeholder="Type a message...">
-        <button style="width: auto;" onclick="sendMsg()">Send</button>
-    </div>
-</div>
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
 
-<script src="/socket.io/socket.io.js"></script>
-<script>
-    const socket = io();
-    let currentPhone = '';
-    let activeChatFriendPhone = '';
+        window.onload = function() {
+            window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+                'size': 'invisible'
+            });
+            changeLanguage(); // डिफ़ॉल्ट भाषा सेट करें
+        };
 
-    // 1. Send & Verify OTP
-    function sendOTP() {
-        currentPhone = document.getElementById('phoneInput').value.trim();
-        if(currentPhone) socket.emit('send-otp', currentPhone);
-    }
-
-    socket.on('otp-sent', data => {
-        alert(data.message);
-        document.getElementById('otp-container').style.display = 'block';
-    });
-
-    function verifyOTP() {
-        const otp = document.getElementById('otpInput').value.trim();
-        socket.emit('verify-otp', { phone: currentPhone, otp });
-    }
-
-    socket.on('login-success', ({ isNewUser, userData }) => {
-        switchScreen(isNewUser ? 'profile-screen' : 'app-screen');
-        if(!isNewUser) renderProfileData(userData);
-    });
-
-    // 2. Save User Profile
-    function saveProfile() {
-        const username = document.getElementById('usernameInput').value.trim();
-        const bio = document.getElementById('bioInput').value.trim();
-        const avatar = document.getElementById('avatarUrl').value.trim();
-
-        socket.emit('save-profile', { phone: currentPhone, username, bio, avatar });
-    }
-
-    socket.on('profile-saved-success', (userData) => {
-        switchScreen('app-screen');
-        renderProfileData(userData);
-    });
-
-    function renderProfileData(user) {
-        document.getElementById('my-username').innerText = user.username;
-        document.getElementById('my-phone').innerText = user.phone;
-        document.getElementById('my-avatar').src = user.avatar || 'https://via.placeholder.com/150';
-
-        if(user.pendingRequests && user.pendingRequests.length > 0) {
-            const alertBox = document.getElementById('request-alert');
-            alertBox.style.display = 'block';
-            alertBox.innerHTML = `<b>Friend Request From:</b> ${user.pendingRequests[0]} 
-                <button style="width:auto; padding:4px 8px;" onclick="acceptFriend('${user.pendingRequests[0]}')">Accept</button>`;
+        window.sendOTP = function() {
+            const phoneNumber = document.getElementById('phone').value;
+            signInWithPhoneNumber(auth, phoneNumber, window.recaptchaVerifier)
+                .then((confirmationResult) => {
+                    window.confirmationResult = confirmationResult;
+                    const lang = document.getElementById('lang-select').value;
+                    alert(lang === 'hi' ? "असली OTP भेज दिया गया है!" : "Real OTP sent successfully!");
+                    document.getElementById('phone-box').classList.add('hidden');
+                    document.getElementById('otp-box').classList.remove('hidden');
+                }).catch((error) => {
+                    alert("Error: " + error.message);
+                });
         }
-    }
 
-    // 3. Search System
-    function searchUser(query) {
-        if(query.length > 0) socket.emit('search-username', query);
-        else document.getElementById('search-results').innerHTML = '';
-    }
+        window.verifyOTP = function() {
+            const code = document.getElementById('otp').value;
+            window.confirmationResult.confirm(code).then((result) => {
+                const user = result.user;
+                document.getElementById('login-card').style.display = 'none';
+                document.getElementById('app-container').style.display = 'flex';
+                document.getElementById('current-user-phone').innerText = (document.getElementById('lang-select').value === 'hi' ? "यूजर: " : "User: ") + user.phoneNumber;
+                loadSampleUsers();
+            }).catch((error) => {
+                const lang = document.getElementById('lang-select').value;
+                alert(lang === 'hi' ? "गलत OTP दर्ज किया गया है!" : "Invalid OTP entered!");
+            });
+        }
+    </script>
 
-    socket.on('search-results', (users) => {
-        const resultsBox = document.getElementById('search-results');
-        resultsBox.innerHTML = '';
-        users.forEach(u => {
-            resultsBox.innerHTML += `
-                <div class="search-card">
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <img src="${u.avatar || 'https://via.placeholder.com/150'}">
-                        <div><b>${u.username}</b><br><small>${u.bio || 'No bio'}</small></div>
+    <script>
+        // डिक्शनरी: हिंदी और अंग्रेजी टेक्स्ट के लिए
+        const translations = {
+            hi: {
+                loginTitle: "Vibe-chat लॉगिन",
+                phoneDesc: "फायरबेस असली OTP के लिए नंबर (+91) डालें",
+                otpBtn: "असली OTP भेजें",
+                otpDesc: "6-अंकों का OTP दर्ज करें",
+                verifyBtn: "लॉगिन वेरिफ़ाई करें",
+                dashTitle: "✨ Vibe-chat डैशबोर्ड",
+                searchPlaceholder: "🔍 यूजर खोजें...",
+                profilesTitle: "उपलब्ध प्रोफाइल्स और फ्रेंड्स",
+                groupBtn: "+ नया ग्रुप बनाएं",
+                activeTitle: "बातचीत करने के लिए किसी फ्रेंड को चुनें",
+                vcallBtn: "📹 वीडियो कॉल",
+                gamesBtn: "🎮 गेम्स",
+                chatRule: "🔒 नियम: जब तक आप किसी को फ्रेंड के रूप में 'Add' नहीं करते, तब तक आप चैट नहीं कर सकते।",
+                msgPlaceholder: "संदेश टाइप करें...",
+                sendBtn: "भेजें",
+                chatBtnText: "चैट करें",
+                addBtnText: "ऐड करें"
+            },
+            en: {
+                loginTitle: "Vibe-chat Login",
+                phoneDesc: "Enter phone number (+91) for Firebase Real OTP",
+                otpBtn: "Send Real OTP",
+                otpDesc: "Enter 6-digit OTP code",
+                verifyBtn: "Verify Login",
+                dashTitle: "✨ Vibe-chat Dashboard",
+                searchPlaceholder: "🔍 Search users...",
+                profilesTitle: "Available Profiles & Friends",
+                groupBtn: "+ Create New Group",
+                activeTitle: "Select a friend to start chatting",
+                vcallBtn: "📹 Video Call",
+                gamesBtn: "🎮 Games",
+                chatRule: "🔒 Rule: You cannot chat until you add the person as a friend.",
+                msgPlaceholder: "Type a message...",
+                sendBtn: "Send",
+                chatBtnText: "Chat",
+                addBtnText: "Add"
+            }
+        };
+
+        function changeLanguage() {
+            const lang = document.getElementById('lang-select').value;
+            const t = translations[lang];
+
+            document.getElementById('t-login-title').innerText = t.loginTitle;
+            document.getElementById('t-phone-desc').innerText = t.phoneDesc;
+            document.getElementById('t-otp-btn').innerText = t.otpBtn;
+            document.getElementById('t-otp-desc').innerText = t.otpDesc;
+            document.getElementById('t-verify-btn').innerText = t.verifyBtn;
+            document.getElementById('t-dash-title').innerText = t.dashTitle;
+            document.getElementById('search-user').placeholder = t.searchPlaceholder;
+            document.getElementById('t-profiles-title').innerText = t.profilesTitle;
+            document.getElementById('t-group-btn').innerText = t.groupBtn;
+            document.getElementById('active-chat-title').innerText = t.activeTitle;
+            document.getElementById('t-vcall-btn').innerText = t.vcallBtn;
+            document.getElementById('t-games-btn').innerText = t.gamesBtn;
+            document.getElementById('t-chat-rule').innerText = t.chatRule;
+            document.getElementById('message-input').placeholder = t.msgPlaceholder;
+            document.getElementById('send-btn').innerText = t.sendBtn;
+
+            renderUsers(allUsers);
+        }
+
+        let allUsers = [
+            { id: 1, name: "Rahul Kumar", phone: "+91 9876543210", isFriend: false },
+            { id: 2, name: "Amit Verma", phone: "+91 9123456789", isFriend: true },
+            { id: 3, name: "Priya Sharma", phone: "+91 9988776655", isFriend: false }
+        ];
+        
+        let activeUser = null;
+
+        function renderUsers(usersToDisplay) {
+            const lang = document.getElementById('lang-select').value;
+            const t = translations[lang];
+            const container = document.getElementById('user-list-container');
+            container.innerHTML = "";
+            usersToDisplay.forEach(u => {
+                container.innerHTML += `
+                    <div class="user-item">
+                        <div>
+                            <strong>${u.name}</strong><br><small style="color:#94a3b8">${u.phone}</small>
+                        </div>
+                        <div>
+                            ${u.isFriend ? 
+                                `<button style="padding: 4px 8px; font-size:12px; background:#16a34a;" onclick="openChat('${u.name}')">${t.chatBtnText}</button>` : 
+                                `<button style="padding: 4px 8px; font-size:12px; background:#2563eb;" onclick="addFriend(${u.id})">${t.addBtnText}</button>`
+                            }
+                        </div>
                     </div>
-                    <button style="width:auto; padding:6px 10px;" onclick="addFriend('${u.phone}')">➕ Add Friend</button>
-                </div>`;
-        });
-    });
-
-    function addFriend(targetPhone) {
-        socket.emit('send-friend-request', { targetPhone, myPhone: currentPhone });
-    }
-
-    function acceptFriend(requesterPhone) {
-        socket.emit('accept-friend-request', { myPhone: currentPhone, requesterPhone });
-    }
-
-    socket.on('friend-accepted', (userData) => {
-        alert("Friend added! You can now chat.");
-        document.getElementById('request-alert').style.display = 'none';
-        activeChatFriendPhone = userData.friends[0];
-    });
-
-    // 4. Send Messaging & Delete Message
-    function sendMsg() {
-        const text = document.getElementById('msgInput').value;
-        if(text && activeChatFriendPhone) {
-            socket.emit('send-private-msg', { myPhone: currentPhone, targetPhone: activeChatFriendPhone, text });
-            document.getElementById('msgInput').value = '';
-        } else {
-            alert("Please select or add a friend first to start chatting!");
+                `;
+            });
         }
-    }
 
-    socket.on('receive-private-msg', (msg) => {
-        const chatBox = document.getElementById('chat-box');
-        const isMine = msg.senderPhone === currentPhone;
+        function loadSampleUsers() {
+            renderUsers(allUsers);
+        }
 
-        const div = document.createElement('div');
-        div.className = `message-bubble ${isMine ? 'mine' : ''}`;
-        div.id = `msg-${msg.id}`;
-        div.innerHTML = `
-            <span>${msg.text}</span>
-            <small style="font-size:9px; color:gray;">${msg.timestamp}</small>
-            ${isMine ? `<button class="delete-btn" onclick="deleteMsg('${msg.id}')">🗑️ Delete</button>` : ''}
-        `;
+        function searchUsers() {
+            const query = document.getElementById('search-user').value.toLowerCase();
+            const filtered = allUsers.filter(u => u.name.toLowerCase().includes(query) || u.phone.includes(query));
+            renderUsers(filtered);
+        }
 
-        chatBox.appendChild(div);
-        chatBox.scrollTop = chatBox.scrollHeight;
-    });
+        function addFriend(id) {
+            const user = allUsers.find(u => u.id === id);
+            const lang = document.getElementById('lang-select').value;
+            if(user) {
+                user.isFriend = true;
+                alert(lang === 'hi' ? `${user.name} को फ्रेंड लिस्ट में जोड़ लिया गया है!` : `${user.name} added to friends list!`);
+                renderUsers(allUsers);
+            }
+        }
 
-    function deleteMsg(msgId) {
-        socket.emit('delete-msg', msgId);
-    }
+        function openChat(name) {
+            activeUser = name;
+            const lang = document.getElementById('lang-select').value;
+            document.getElementById('active-chat-title').innerText = (lang === 'hi' ? "चैट विथ: " : "Chat with: ") + name;
+            document.getElementById('message-input').disabled = false;
+            document.getElementById('send-btn').disabled = false;
+            document.getElementById('chat-messages').innerHTML = `<p style="color: #38bdf8;">${name} ${lang === 'hi' ? 'के साथ चैट शुरू...' : 'chat started...'}</p>`;
+        }
 
-    socket.on('msg-deleted-success', (msgId) => {
-        const msgEl = document.getElementById(`msg-${msgId}`);
-        if(msgEl) msgEl.remove();
-    });
+        function sendMessage() {
+            const input = document.getElementById('message-input');
+            const msg = input.value.trim();
+            if(msg && activeUser) {
+                const box = document.getElementById('chat-messages');
+                box.innerHTML += `<div style="text-align: right; margin: 5px 0;"><span style="background: #2563eb; padding: 8px 12px; border-radius: 8px; display: inline-block;">${msg}</span></div>`;
+                input.value = "";
+                box.scrollTop = box.scrollHeight;
+            }
+        }
 
-    socket.on('toast-msg', msg => alert(msg));
+        function createGroup() {
+            const lang = document.getElementById('lang-select').value;
+            const groupName = prompt(lang === 'hi' ? "अपने नए ग्रुप का नाम दर्ज करें:" : "Enter new group name:");
+            if(groupName) {
+                alert(lang === 'hi' ? `ग्रुप "${groupName}" बन गया है!` : `Group "${groupName}" created!`);
+            }
+        }
 
-    function switchScreen(screenId) {
-        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-        document.getElementById(screenId).classList.add('active');
-    }
-</script>
+        function startVideoCall() {
+            const lang = document.getElementById('lang-select').value;
+            alert(lang === 'hi' ? "वीडियो कॉल शुरू हो रही है..." : "Starting video call...");
+        }
 
+        function openGames() {
+            const lang = document.getElementById('lang-select').value;
+            alert(lang === 'hi' ? "गेमिंग ज़ोन खुल रहा है..." : "Opening gaming zone...");
+        }
+    </script>
 </body>
 </html>
