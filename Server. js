@@ -1,0 +1,112 @@
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { maxHttpBufferSize: 1e7 }); // 10MB limit for media/voice
+
+app.use(express.static('public'));
+
+// Database in Memory
+let usersDB = {};       // Stores user details by phone number
+let socketToPhone = {}; // Maps socket connections to phone numbers
+
+io.on('connection', (socket) => {
+    console.log('New User Connected:', socket.id);
+
+    // 1. Phone OTP System
+    socket.on('send-otp', (phone) => {
+        // Send OTP confirmation to client
+        socket.emit('otp-sent', { success: true, message: 'OTP sent: 1234' });
+    });
+
+    socket.on('verify-otp', ({ phone, otp }) => {
+        if (otp === '1234') { // Dummy OTP Verification
+            const isNewUser = !usersDB[phone];
+            if (isNewUser) {
+                usersDB[phone] = { 
+                    phone, 
+                    username: '', 
+                    bio: '', 
+                    avatar: '', 
+                    friends: [], 
+                    pendingRequests: [] 
+                };
+            }
+            socketToPhone[socket.id] = phone;
+            socket.emit('login-success', { isNewUser, userData: usersDB[phone] });
+        } else {
+            socket.emit('login-error', 'Invalid OTP!');
+        }
+    });
+
+    // 2. Setup Profile (Photo, Username, Bio)
+    socket.on('save-profile', ({ phone, username, bio, avatar }) => {
+        if (usersDB[phone]) {
+            usersDB[phone].username = username;
+            usersDB[phone].bio = bio;
+            usersDB[phone].avatar = avatar || 'https://via.placeholder.com/150';
+            socket.emit('profile-saved-success', usersDB[phone]);
+        }
+    });
+
+    // 3. Search Users by Username / ID
+    socket.on('search-username', (query) => {
+        const q = query.toLowerCase().trim();
+        const currentPhone = socketToPhone[socket.id];
+        
+        const results = Object.values(usersDB).filter(u => 
+            u.username.toLowerCase().includes(q) && u.phone !== currentPhone
+        );
+        socket.emit('search-results', results);
+    });
+
+    // 4. Friend Request System (Privacy Layer)
+    socket.on('send-friend-request', ({ targetPhone, myPhone }) => {
+        if (usersDB[targetPhone]) {
+            if (!usersDB[targetPhone].pendingRequests.includes(myPhone) && 
+                !usersDB[targetPhone].friends.includes(myPhone)) {
+                usersDB[targetPhone].pendingRequests.push(myPhone);
+                socket.emit('toast-msg', 'Friend request sent successfully!');
+            }
+        }
+    });
+
+    socket.on('accept-friend-request', ({ myPhone, requesterPhone }) => {
+        if (usersDB[myPhone]) {
+            usersDB[myPhone].friends.push(requesterPhone);
+            usersDB[requesterPhone].friends.push(myPhone);
+            // Remove from pending
+            usersDB[myPhone].pendingRequests = usersDB[myPhone].pendingRequests.filter(p => p !== requesterPhone);
+            socket.emit('friend-accepted', usersDB[myPhone]);
+        }
+    });
+
+    // 5. Private Messaging & Delete Messaging Logic
+    socket.on('send-private-msg', ({ myPhone, targetPhone, text }) => {
+        const isFriend = usersDB[myPhone]?.friends.includes(targetPhone);
+        
+        if (!isFriend) {
+            socket.emit('toast-msg', 'You can only message your added friends!');
+            return;
+        }
+
+        const msgData = {
+            id: Date.now().toString(),
+            senderPhone: myPhone,
+            targetPhone: targetPhone,
+            text: text,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+
+        io.emit('receive-private-msg', msgData);
+    });
+
+    socket.on('delete-msg', (msgId) => {
+        io.emit('msg-deleted-success', msgId);
+    });
+});
+
+server.listen(3000, () => console.log('Server running on http://localhost:3000'));
+
