@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp Lite with Profile & Bio</title>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background-color: #0b141a; color: #e9edef; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    .app-container { width: 100%; max-width: 450px; height: 100vh; background: #111b21; display: flex; flex-direction: column; position: relative; }
+    
+    /* Header */
+    .header { background: #202c33; padding: 12px 15px; font-size: 18px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; color: #00a884; border-bottom: 1px solid #222d34; }
+    .user-info { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #e9edef; }
+    .verified-tick { color: #00a884; font-weight: bold; }
+
+    /* Navigation Tabs */
+    .nav-tabs { display: flex; background: #1f2c34; border-bottom: 2px solid #00a884; }
+    .tab-btn { flex: 1; padding: 12px 0; background: none; border: none; color: #8696a0; font-weight: bold; font-size: 11px; cursor: pointer; text-align: center; }
+    .tab-btn.active { color: #00a884; border-bottom: 3px solid #00a884; }
+
+    .screen { display: none; flex-direction: column; height: 100%; overflow: hidden; }
+    .screen.active { display: flex; }
+
+    .section-title { padding: 8px 15px; background: #182229; font-size: 11px; color: #00a884; font-weight: bold; text-transform: uppercase; }
+    
+    .action-buttons { display: flex; gap: 6px; padding: 10px; background: #111b21; border-bottom: 1px solid #222d34; flex-wrap: wrap; }
+    .action-btn { flex: 1; padding: 8px 4px; background: #202c33; color: #00a884; border: 1px solid #00a884; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 11px; text-align: center; white-space: nowrap; }
+    .buy-tick-btn { background: #00a884; color: #ffffff; border: none; }
+
+    .content-list { flex: 1; overflow-y: auto; }
+    .chat-item { padding: 12px 15px; border-bottom: 1px solid #222d34; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+    .chat-item:hover { background: #202c33; }
+    .chat-name { font-weight: bold; color: #e9edef; font-size: 15px; display: flex; align-items: center; gap: 4px; }
+    .chat-type { font-size: 12px; color: #8696a0; margin-top: 2px; }
+
+    /* Post Card */
+    .post-card { background: #202c33; margin: 10px; padding: 12px; border-radius: 10px; border: 1px solid #2a3942; }
+    .post-header { display: flex; justify-content: space-between; font-weight: bold; color: #00a884; font-size: 13px; margin-bottom: 8px; }
+    .post-text { font-size: 14px; color: #e9edef; margin-bottom: 10px; word-break: break-word; }
+    .post-footer { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #8696a0; border-top: 1px solid #2a3942; padding-top: 8px; }
+    .like-btn { background: none; border: none; color: #f15c6d; cursor: pointer; font-size: 14px; font-weight: bold; }
+
+    /* Profile / Home Screen Styles */
+    .profile-box { padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 15px; text-align: center; }
+    .profile-avatar { width: 90px; height: 90px; background: #2a3942; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 40px; border: 2px solid #00a884; }
+    .profile-field { width: 100%; background: #202c33; padding: 12px; border-radius: 8px; text-align: left; border: 1px solid #2a3942; }
+    .profile-label { font-size: 11px; color: #00a884; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; }
+    .profile-val { font-size: 15px; color: #e9edef; display: flex; justify-content: space-between; align-items: center; }
+    .edit-btn { background: none; border: none; color: #00a884; font-size: 12px; cursor: pointer; font-weight: bold; }
+
+    /* Reels Feed */
+    .reels-container { flex: 1; overflow-y: scroll; scroll-snap-type: y mandatory; background: #000; }
+    .reel-card { height: 100%; width: 100%; scroll-snap-align: start; position: relative; display: flex; justify-content: center; align-items: center; background: #000; border-bottom: 2px solid #202c33; }
+    .reel-video { width: 100%; height: 100%; object-fit: cover; }
+    .reel-overlay { position: absolute; bottom: 20px; left: 15px; right: 15px; display: flex; justify-content: space-between; align-items: flex-end; }
+    .reel-info { color: #fff; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); }
+    .reel-author { font-weight: bold; font-size: 15px; display: flex; align-items: center; gap: 4px; color: #00a884; }
+    .reel-caption { font-size: 13px; margin-top: 4px; }
+    .reel-actions { display: flex; flex-direction: column; gap: 15px; align-items: center; }
+    .reel-btn { background: rgba(32, 44, 51, 0.7); border: none; color: #fff; width: 45px; height: 45px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 18px; cursor: pointer; }
+
+    /* Chat Room Header */
+    .chat-header { background: #202c33; padding: 10px 15px; display: flex; align-items: center; justify-content: space-between; }
+    .chat-header-left { display: flex; align-items: center; gap: 10px; }
+    .chat-actions { display: flex; gap: 8px; }
+    .safety-btn { background: #2a3942; border: none; color: #f15c6d; padding: 5px 8px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer; }
+
+    .back-btn { background: none; border: none; color: #00a884; font-size: 22px; cursor: pointer; }
+    .chat-box { flex: 1; padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; background-color: #0b141a; }
+
+    /* Messages */
+    .msg-div { background: #202c33; padding: 8px 12px; border-radius: 8px; max-width: 75%; align-self: flex-start; word-wrap: break-word; font-size: 14px; }
+    .msg-div.self { background: #005c4b; align-self: flex-end; }
+    .sender-name { font-weight: bold; font-size: 11px; color: #53bdeb; margin-bottom: 2px; }
+    .msg-footer { display: flex; justify-content: flex-end; margin-top: 4px; font-size: 10px; color: #8696a0; }
+
+    /* Input */
+    .input-wrapper { background: #202c33; padding: 8px; }
+    .chat-input { display: flex; gap: 8px; align-items: center; }
+    .chat-input input { flex: 1; padding: 10px 15px; border: none; border-radius: 20px; background: #2a3942; color: #e9edef; outline: none; font-size: 14px; }
+    .chat-input button { padding: 10px 14px; background: #00a884; color: white; border: none; border-radius: 50%; cursor: pointer; }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <div class="header">
+      <span>WhatsApp Lite</span>
+      <div class="user-info" id="userDisplay"></div>
+    </div>
+
+    <div class="nav-tabs" id="navTabs">
+      <button class="tab-btn active" onclick="switchTab('chatsTab')">💬 CHATS</button>
+      <button class="tab-btn" onclick="switchTab('postsTab')">📝 POSTS</button>
+      <button class="tab-btn" onclick="switchTab('reelsTab')">🎬 REELS</button>
+      <button class="tab-btn" onclick="switchTab('profileTab')">👤 PROFILE</button>
+    </div>
+
+    <div id="chatsTab" class="screen active">
+      <div class="action-buttons">
+        <button class="action-btn" onclick="addContact()">+ Add Contact</button>
+        <button class="action-btn" onclick="createGroup()">+ New Group</button>
+        <button class="action-btn buy-tick-btn" id="buyTickBtn" onclick="buyBlueTick()">Buy Blue Tick ₹99</button>
+      </div>
+      
+      <div class="section-title">My Contacts</div>
+      <div class="content-list" id="contactsList"></div>
+
+      <div class="section-title">My Groups</div>
+      <div class="content-list" id="groupsList"></div>
+    </div>
+
+    <div id="postsTab" class="screen">
+      <div class="action-buttons">
+        <button class="action-btn buy-tick-btn" onclick="createPost()">+ Create New Post</button>
+      </div>
+      <div class="content-list" id="postsList"></div>
+    </div>
+
+    <div id="reelsTab" class="screen">
+      <div class="action-buttons">
+        <input type="file" id="reelFileInput" accept="video/*" style="display:none;" onchange="handleReelUpload(event)">
+        <button class="action-btn buy-tick-btn" onclick="document.getElementById('reelFileInput').click()">🎥 Upload Video Reel</button>
+      </div>
+      <div class="reels-container" id="reelsContainer"></div>
+    </div>
+
+    <div id="profileTab" class="screen">
+      <div class="profile-box">
+        <div class="profile-avatar">👤</div>
+        
+        <div class="profile-field">
+          <div class="profile-label">Username</div>
+          <div class="profile-val">
+            <span id="profName">User</span>
+            <span id="profTick"></span>
+          </div>
+        </div>
+
+        <div class="profile-field">
+          <div class="profile-label">About / Bio</div>
+          <div class="profile-val">
+            <span id="profBio">Hey there! I am using WhatsApp Lite.</span>
+            <button class="edit-btn" onclick="updateBio()">✏️ Edit</button>
+          </div>
+        </div>
+
+        <div class="profile-field">
+          <div class="profile-label">Account Status</div>
+          <div class="profile-val">
+            <span id="profStatus">Standard User</span>
+          </div>
+        </div>
+
+        <button class="action-btn buy-tick-btn" style="width: 100%; padding: 12px; margin-top: 10px;" onclick="buyBlueTick()">Get Verified Blue Tick (₹99)</button>
+      </div>
+    </div>
+
+    <div id="chatScreen" class="screen">
+      <div class="chat-header">
+        <div class="chat-header-left">
+          <button class="back-btn" onclick="exitChat()">←</button>
+          <div>
+            <div id="activeChatTitle" style="font-weight: bold; color: #e9edef; display: flex; align-items: center; gap: 4px;"></div>
+            <div id="activeChatSub" style="font-size: 11px; color: #8696a0;"></div>
+          </div>
+        </div>
+        
+        <div class="chat-actions" id="chatSafetyBox">
+          <button class="safety-btn" onclick="blockCurrentTarget()">🚫 Block</button>
+          <button class="safety-btn" onclick="reportCurrentTarget()" style="color:#e2a03f;">⚠️ Report</button>
+        </div>
+      </div>
+      
+      <div class="chat-box" id="chatBox"></div>
+      
+      <div class="input-wrapper">
+        <div class="chat-input">
+          <input type="text" id="msgInput" placeholder="Type a message...">
+          <button onclick="sendMessage()">➤</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Firebase Setup
+    const firebaseConfig = { databaseURL: "https://blinkchat-demo-default-rtdb.firebaseio.com" };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // User details
+    let myName = localStorage.getItem("chatUsername");
+    if (!myName) {
+      myName = prompt("Enter your username:") || "User_" + Math.floor(Math.random() * 1000);
+      localStorage.setItem("chatUsername", myName);
+    }
+
+    let isVerified = false;
+    let activeTargetUser = null;
+    let localReelsList = [];
+
+    // Sync Profile & Verified Status
+    db.ref("users/" + myName).on("value", (snapshot) => {
+      const uData = snapshot.val();
+      if (uData) {
+        if (uData.isVerified) {
+          isVerified = true;
+          document.getElementById("buyTickBtn").style.display = "none";
+        }
+        document.getElementById("profBio").innerText = uData.bio || "Hey there! I am using WhatsApp Lite.";
+      }
+      updateUserHeader();
+      loadProfileData();
+    });
+
+    function updateUserHeader() {
+      document.getElementById("userDisplay").innerHTML = `
+        👤 ${myName} ${isVerified ? '<span class="verified-tick">✔</span>' : ''}
+      `;
+    }
+
+    function loadProfileData() {
+      document.getElementById("profName").innerText = myName;
+      document.getElementById("profTick").innerHTML = isVerified ? '<span class="verified-tick">✔ Verified</span>' : '';
+      document.getElementById("profStatus").innerText = isVerified ? "Verified VIP Account" : "Free Member";
+    }
+
+    function updateBio() {
+      const newBio = prompt("Write your new Bio / About status:");
+      if (newBio && newBio.trim() !== "") {
+        db.ref("users/" + myName + "/bio").set(newBio.trim());
+      }
+    }
+
+    db.ref("users/" + myName + "/username").set(myName);
+
+    let activeChatId = null;
+    let activeChatRef = null;
+
+    // Switch Main Tabs
+    function switchTab(tabId) {
+      document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+      document.getElementById("navTabs").style.display = "flex";
+
+      document.getElementById(tabId).classList.add("active");
+      
+      if(tabId === 'chatsTab') {
+        event.target.classList.add("active");
+        loadContactsAndGroups();
+      } else if(tabId === 'postsTab') {
+        event.target.classList.add("active");
+        loadPosts();
+      } else if(tabId === 'reelsTab') {
+        event.target.classList.add("active");
+        renderReels();
+      } else if(tabId === 'profileTab') {
+        event.target.classList.add("active");
+        loadProfileData();
+      }
+    }
+
+    function addContact() {
+      const targetUser = prompt("Enter username of the person you want to add:");
+      if (!targetUser || targetUser.trim() === "" || targetUser.trim() === myName) return;
+
+      db.ref("users/" + targetUser.trim()).once("value", (snapshot) => {
+        if (snapshot.exists()) {
+          db.ref("contacts/" + myName + "/" + targetUser.trim()).set(true);
+          db.ref("contacts/" + targetUser.trim() + "/" + myName).set(true);
+          alert("Contact added successfully!");
+        } else {
+          alert("User not found!");
+        }
+      });
+    }
+
+    function buyBlueTick() {
+      if (confirm("Buy Blue Tick Badge for ₹99?")) {
+        alert("Payment Successful! Blue Tick Activated ✔️");
+        isVerified = true;
+        db.ref("users/" + myName + "/isVerified").set(true);
+      }
+    }
+
+    function createPost() {
+      const postText = prompt("Write your post content:");
+      if (!postText || postText.trim() === "") return;
+
+      const now = new Date();
+      const timeStr = now.toLocaleDateString() + " " + now.getHours() + ':' + (now.getMinutes() < 10 ? '0' : '') + now.getMinutes();
+
+      db.ref("posts").push({
+        author: myName,
+        text: postText.trim(),
+        time: timeStr,
+        isVerified: isVerified,
+        likes: 0
+      });
+    }
+
+    function loadPosts() {
+      const postsDiv = document.getElementById("postsList");
+      db.ref("posts").on("value", (snapshot) => {
+        postsDiv.innerHTML = "";
+        const posts = snapshot.val();
+        if (!posts) {
+          postsDiv.innerHTML = `<div style="padding:15px; color:#8696a0; text-align:center;">No posts yet. Be the first to create one!</div>`;
+          return;
+        }
+
+        for (let key in posts) {
+          const p = posts[key];
+          const postCard = document.createElement("div");
+          postCard.className = "post-card";
+          postCard.innerHTML = `
+            <div class="post-header">
+              <span>👤 ${p.author} ${p.isVerified ? '<span class="verified-tick">✔</span>' : ''}</span>
+              <span style="font-size:10px; color:#8696a0;">${p.time}</span>
+            </div>
+            <div class="post-text">${p.text}</div>
+            <div class="post-footer">
+              <button class="like-btn" onclick="likePost('${key}', ${p.likes || 0})">❤️ Like (${p.likes || 0})</button>
+            </div>
+          `;
+          postsDiv.prepend(postCard);
+        }
+      });
+    }
+
+    function likePost(key, currentLikes) {
+      db.ref("posts/" + key + "/likes").set(currentLikes + 1);
+    }
+
+    function handleReelUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const caption = prompt("Enter caption for your reel:") || "My Reel Video 🎬";
+      const videoBlobUrl = URL.createObjectURL(file);
+
+      localReelsList.unshift({
+        author: myName,
+        videoUrl: videoBlobUrl,
+        caption: caption,
+        likes: 0,
+        isVerified: isVerified
+      });
+
+      alert("Video selected! Playing in Reels tab.");
+      renderReels();
+    }
+
+    function renderReels() {
+      const container = document.getElementById("reelsContainer");
+      container.innerHTML = "";
+
+      let reelsToDisplay = [...localReelsList];
+      if (reelsToDisplay.length === 0) {
+        reelsToDisplay = [
+          { author: "SampleUser", videoUrl: "https://www.w3schools.com/html/mov_bbb.mp4", caption: "Welcome to Reels! Upload your video above 🎬", likes: 5 }
+        ];
+      }
+
+      reelsToDisplay.forEach((r) => {
+        const card = document.createElement("div");
+        card.className = "reel-card";
+        card.innerHTML = `
+          <video class="reel-video" src="${r.videoUrl}" loop autoplay muted onclick="this.paused ? this.play() : this.pause()"></video>
+          <div class="reel-overlay">
+            <div class="reel-info">
+              <div class="reel-author">👤 ${r.author} ${r.isVerified ? '<span class="verified-tick">✔</span>' : ''}</div>
+              <div class="reel-caption">${r.caption}</div>
+            </div>
+            <div class="reel-actions">
+              <button class="reel-btn" onclick="this.nextElementSibling.innerText = parseInt(this.nextElementSibling.innerText)+1">❤️</button>
+              <span style="font-size:11px; color:#fff; text-align:center;">${r.likes}</span>
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function openPrivateChat(targetUser, targetVerified) {
+      activeTargetUser = targetUser;
+      document.getElementById("chatSafetyBox").style.display = "flex";
+
+      const chatId = [myName, targetUser].sort().join("_PRIVATE_");
+      const titleWithTick = targetUser + (targetVerified ? ' <span class="verified-tick">✔</span>' : '');
+      openChat(chatId, titleWithTick, "Private Chat");
+    }
+
+    function createGroup() {
+      const groupName = prompt("Enter group name:");
+      if (!groupName || groupName.trim() === "") return;
+
+      const groupId = "GROUP_" + groupName.trim().replace(/\s+/g, '_');
+      db.ref("groups/" + groupId).set({ name: groupName.trim(), createdBy: myName });
+      openChat(groupId, groupName.trim(), "Group Chat");
+    }
+
+    function openChat(chatId, titleHTML, subText) {
+      activeChatId = chatId;
+      document.getElementById("activeChatTitle").innerHTML = titleHTML;
+      document.getElementById("activeChatSub").innerText = subText;
+
+      document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+      document.getElementById("chatScreen").classList.add("active");
+      document.getElementById("navTabs").style.display = "none";
+
+      listenToMessages();
+    }
+
+    function exitChat() {
+      activeTargetUser = null;
+      document.getElementById("chatScreen").classList.remove("active");
+      document.getElementById("chatsTab").classList.add("active");
+      document.getElementById("navTabs").style.display = "flex";
+      if (activeChatRef) activeChatRef.off();
+    }
+
+    function loadContactsAndGroups() {
+      const contactsDiv = document.getElementById("contactsList");
+      
+      db.ref("contacts/" + myName).on("value", (snapshot) => {
+        contactsDiv.innerHTML = "";
+        const contacts = snapshot.val();
+        
+        if (!contacts) {
+          contactsDiv.innerHTML = `<div style="padding: 15px; color: #8696a0; font-size: 13px;">No contacts added yet. Tap "+ Add Contact" to add friends.</div>`;
+          return;
+        }
+
+ 
